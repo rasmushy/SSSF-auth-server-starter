@@ -3,7 +3,7 @@ import {NextFunction, Request, Response} from 'express';
 import ErrorResponse from './interfaces/ErrorResponse';
 import CustomError from './classes/CustomError';
 import jwt from 'jsonwebtoken';
-import {OutputUser} from './interfaces/User';
+import {OutputUser, TokenUser} from './interfaces/User';
 import userModel from './api/models/userModel';
 
 const notFound = (req: Request, res: Response, next: NextFunction) => {
@@ -31,40 +31,39 @@ const authenticate = async (
   next: NextFunction
 ) => {
   try {
-    console.log('authenticate');
-    // extract bearer token from header
-    const bearerHeader = req.headers['authorization'];
-    if (!bearerHeader || typeof bearerHeader === 'undefined') {
-      next(new CustomError('token not valid', 403));
+    const bearer = req.headers.authorization;
+    if (!bearer) {
+      next(new CustomError('Unauthorized', 401));
       return;
     }
 
-    // extract token from bearer token
-    const bearer = bearerHeader.split(' ');
-    const token = bearer[1];
+    const token = bearer.split(' ')[1];
+
     if (!token) {
-      next(new CustomError('token not valid', 403));
+      next(new CustomError('Unauthorized', 401));
       return;
     }
 
-    console.log('token', token);
-    // extract user from token
-    const user = jwt.verify(
+    const userFromToken = jwt.verify(
       token,
       process.env.JWT_SECRET as string
-    ) as OutputUser;
-    // check that user is in database
-    console.log('authenticate', user);
-    const result = await userModel.findById(user.id);
-    if (result) {
-      console.log(user, result);
-      res.locals.user = user;
-      next();
-    } else {
-      next(new CustomError('token not valid', 403));
+    ) as TokenUser;
+
+    const user = (await userModel
+      .findById(userFromToken.id)
+      .select('-password, -role')) as OutputUser;
+
+    if (!user) {
+      next(new CustomError('Unauthorized', 401));
+      return;
     }
+
+    res.locals.user = user;
+    res.locals.role = userFromToken.role;
+
+    next();
   } catch (error) {
-    next(new CustomError((error as Error).message, 400));
+    next(new CustomError('Unauthorized', 401));
   }
 };
 

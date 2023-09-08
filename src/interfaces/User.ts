@@ -12,4 +12,10 @@ interface OutputUser {
   email: string;
 }
 
-export {User, OutputUser};
+interface TokenUser {
+  id: string;
+  role: 'admin' | 'user';
+}
+
+
+export {User, OutputUser, TokenUser};
